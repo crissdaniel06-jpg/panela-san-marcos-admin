@@ -1,4 +1,4 @@
 window.PANELA_ADMIN_CONFIG = {
   url: "https://nrvqfuzragjsxuvqljpb.supabase.co",
-  anonKey: "PEGA_AQUI_LA_CLAVE_PUBLICA_PUBLISHABLE"
+  anonKey: "sb_publishable_O7ZivzxevD5TGZbtWafoAg_n4kQZ5pE"
 };
