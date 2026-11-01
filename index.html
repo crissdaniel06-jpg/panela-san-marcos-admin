@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Administración | Panela San Marcos</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar"><a class="brand" href="./">Panela <span>San Marcos</span></a><button id="signout" class="quiet" hidden>Cerrar sesión</button></header>
+    <section id="login-panel" class="login card" aria-labelledby="login-title">
+      <p class="eyebrow">PANEL ADMINISTRATIVO</p><h1 id="login-title">Iniciar sesión</h1>
+      <form id="login-form"><label>Correo electrónico<input name="email" type="email" autocomplete="username" required></label><label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">Entrar</button><p id="login-message" class="message" role="alert"></p></form>
+    </section>
+    <section id="admin-panel" hidden>
+      <nav class="tabs" aria-label="Secciones administrativas"><button id="orders-tab" class="primary">Pedidos</button><button id="inventory-tab" class="quiet">Inventario</button></nav>
+      <section id="orders-view">
+      <div class="heading"><div><p class="eyebrow">OPERACIONES</p><h1>Pedidos</h1></div><label class="search">Buscar pedido<input id="search" type="search" placeholder="Número de pedido"></label></div>
+      <div class="toolbar"><div id="counts" class="counts" aria-live="polite"></div><label>Estado<select id="status-filter"><option value="">Todos</option><option>PENDIENTE</option><option>CANCELADO</option><option>COMPLETADO</option></select></label><button id="refresh" class="quiet">Actualizar</button></div>
+      <p id="notice" class="message" role="status" aria-live="polite"></p>
+      <div id="orders" class="orders"></div>
+      </section>
+      <section id="inventory-view" hidden>
+        <div class="heading"><div><p class="eyebrow">CATÁLOGO</p><h1>Inventario</h1></div><label class="search">Buscar producto<input id="product-search" type="search" placeholder="Nombre del producto"></label></div>
+        <p id="inventory-notice" class="message" role="status" aria-live="polite"></p><div id="products" class="orders"></div>
+      </section>
+    </section>
+  </main>
+  <dialog id="order-dialog" aria-labelledby="dialog-title"><div class="dialog-head"><h2 id="dialog-title">Pedido</h2><button id="close-dialog" class="quiet" aria-label="Cerrar">×</button></div><div id="order-detail"></div></dialog>
+  <script src="app.js"></script>
+</body>
+</html>
