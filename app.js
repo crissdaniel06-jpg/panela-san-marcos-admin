@@ -14,6 +14,8 @@
   const money = n => `$${Number(n||0).toFixed(2)}`;
   const fmt = value => value ? new Intl.DateTimeFormat('es-EC',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)) : '—';
   function message(text, error=false){notice.textContent=text;notice.classList.toggle('error',error)}
+  let toastTimer;
+  function showToast(text,error=false){const toast=document.getElementById('admin-toast');toast.textContent=text;toast.classList.toggle('error',error);toast.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{toast.hidden=true},4500)}
   async function checkSession(){
     if(!client){loginPanel.hidden=false;document.getElementById('login-message').textContent='Configura la URL y la clave pública de Supabase en config.js.';return}
     const {data:{session}}=await client.auth.getSession();
@@ -45,8 +47,8 @@
     if(value===p.stock){box.textContent='El stock no cambió.';return}
     const button=document.querySelector(`[data-save-stock="${id}"]`);button.disabled=true;
     const {error}=await client.from('products').update({stock:value,updated_at:new Date().toISOString()}).eq('id',id);
-    button.disabled=false;if(error){box.textContent='No se pudo actualizar el stock. Verifica el rol administrador.';return}
-    p.stock=value;box.textContent=`Stock de ${p.name} actualizado a ${value} unidades.`;
+    button.disabled=false;if(error){box.textContent='No se pudo actualizar el stock. Verifica el rol administrador.';showToast(box.textContent,true);return}
+    p.stock=value;box.textContent=`Stock de ${p.name} actualizado a ${value} unidades.`;showToast(box.textContent);
   }
   function renderOrders(){
     const term=document.getElementById('search').value.trim().toLowerCase(), status=document.getElementById('status-filter').value;
