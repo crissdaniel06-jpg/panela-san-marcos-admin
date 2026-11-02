@@ -12,6 +12,7 @@
   let selectedOrder = null;
   const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money = n => `$${Number(n||0).toFixed(2)}`;
+  const orderNumber = value => `PSM-${String(value).padStart(6,'0')}`;
   const fmt = value => value ? new Intl.DateTimeFormat('es-EC',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)) : '—';
   function message(text, error=false){notice.textContent=text;notice.classList.toggle('error',error)}
   let toastTimer;
@@ -25,7 +26,7 @@
   }
   async function loadOrders(){
     message('Cargando pedidos…');
-    const {data,error}=await client.from('orders').select('id,status,subtotal,shipping,total,payment_method,payment_status,customer_first_name,customer_last_name,customer_email,customer_phone,delivery_address,delivery_city,created_at,order_items(product_id,product_name,quantity,unit_price,line_subtotal,presentation),transfer_receipts(id,storage_path,review_status,review_note,uploaded_at)').order('created_at',{ascending:false}).limit(100);
+    const {data,error}=await client.from('orders').select('id,public_number,status,subtotal,shipping,total,payment_method,payment_status,customer_first_name,customer_last_name,customer_email,customer_phone,delivery_address,delivery_city,created_at,order_items(product_id,product_name,quantity,unit_price,line_subtotal,presentation),transfer_receipts(id,storage_path,review_status,review_note,uploaded_at)').order('created_at',{ascending:false}).limit(100);
     if(error){orders=[];renderOrders();message('No se pudieron cargar los pedidos. Verifica las políticas administrativas de Supabase.',true);return}
     orders=data||[];renderOrders();message(`${orders.length} pedidos cargados.`);
   }
@@ -52,9 +53,17 @@
   }
   function renderOrders(){
     const term=document.getElementById('search').value.trim().toLowerCase(), status=document.getElementById('status-filter').value;
-    const found=orders.filter(o=>(!status||o.status===status)&&(!term||o.id.toLowerCase().includes(term)||`${o.customer_first_name} ${o.customer_last_name}`.toLowerCase().includes(term)));
+    const normalizedTerm=term.replace(/[^a-z0-9]/g,'');
+    const digitsTerm=term.replace(/\D/g,'');
+    const found=orders.filter(o=>{
+      const publicId=orderNumber(o.public_number).toLowerCase();
+      const normalizedPublic=publicId.replace(/[^a-z0-9]/g,'');
+      const matchesPublicNumber=publicId.includes(term)||(normalizedTerm.length>0&&normalizedPublic.includes(normalizedTerm))||(digitsTerm.length>0&&String(o.public_number).includes(digitsTerm));
+      const customerName=`${o.customer_first_name} ${o.customer_last_name}`.toLowerCase();
+      return (!status||o.status===status)&&(!term||o.id.toLowerCase().includes(term)||matchesPublicNumber||customerName.includes(term));
+    });
     document.getElementById('counts').textContent=`${found.length} pedidos · ${orders.filter(o=>o.status==='PENDIENTE').length} pendientes`;
-    ordersNode.innerHTML=found.length?found.map(o=>`<article class="order"><div><h2>Pedido ${esc(o.id.slice(0,8).toUpperCase())}</h2><p>${esc(o.customer_first_name)} ${esc(o.customer_last_name)} · ${esc(fmt(o.created_at))}</p></div><p><span class="badge">${esc(o.status)}</span><br>${esc(o.payment_method)} · ${esc(o.payment_status)}</p><button class="quiet" data-open="${esc(o.id)}">Ver detalle · ${money(o.total)}</button></article>`).join(''):'<p class="empty">No hay pedidos que coincidan con la búsqueda.</p>';
+    ordersNode.innerHTML=found.length?found.map(o=>`<article class="order"><div><h2>Pedido ${esc(orderNumber(o.public_number))}</h2><p>${esc(o.customer_first_name)} ${esc(o.customer_last_name)} · ${esc(fmt(o.created_at))}</p></div><p><span class="badge">${esc(o.status)}</span><br>${esc(o.payment_method)} · ${esc(o.payment_status)}</p><button class="quiet" data-open="${esc(o.id)}">Ver detalle · ${money(o.total)}</button></article>`).join(''):'<p class="empty">No hay pedidos que coincidan con la búsqueda.</p>';
     ordersNode.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',()=>openOrder(b.dataset.open)));
   }
   async function openOrder(id){
@@ -62,8 +71,8 @@
     const o=selectedOrder, receipt=o.transfer_receipts?.[0];
     let receiptMarkup='<p>No hay comprobante adjunto.</p>';
     if(receipt){const {data,error}=await client.storage.from('transfer-receipts').createSignedUrl(receipt.storage_path,60);receiptMarkup=error?'<p>No se pudo abrir el comprobante. Revisa el acceso privado de Storage.</p>':`<a class="receipt-link" target="_blank" rel="noopener" href="${esc(data.signedUrl)}">Abrir comprobante privado (enlace de 60 s)</a><p>Revisión: ${esc(receipt.review_status)} ${esc(receipt.review_note||'')}</p><label>Nota de revisión<textarea id="review-note" maxlength="500"></textarea></label><div class="actions"><button data-review="APROBADO">Verificar pago</button><button class="quiet" data-review="REQUIERE_CORRECCION">Solicitar corrección</button><button class="danger" data-review="RECHAZADO">Rechazar</button></div>`}
-    document.getElementById('dialog-title').textContent=`Pedido ${id.slice(0,8).toUpperCase()}`;
-    document.getElementById('order-detail').innerHTML=`<div class="detail-grid"><p><b>Cliente</b><br>${esc(o.customer_first_name)} ${esc(o.customer_last_name)}</p><p><b>Contacto</b><br>${esc(o.customer_email)} · ${esc(o.customer_phone)}</p><p><b>Entrega</b><br>${esc(o.delivery_address)}, ${esc(o.delivery_city)}</p><p><b>Pago</b><br>${esc(o.payment_method)} · ${esc(o.payment_status)}</p><p><b>Estado</b><br>${esc(o.status)}</p><p><b>Creado</b><br>${esc(fmt(o.created_at))}</p></div><h3>Productos</h3>${(o.order_items||[]).map(i=>`<div class="item-row item"><p>${esc(i.product_name)} × ${i.quantity}<br>${money(i.unit_price)} c/u</p><label>Cantidad<input data-quantity="${i.product_id}" type="number" min="1" max="100" value="${i.quantity}" disabled></label></div>`).join('')}<p>Subtotal ${money(o.subtotal)} · Envío ${money(o.shipping)} · <b>Total ${money(o.total)}</b></p>${receiptMarkup}<h3>Acciones del pedido</h3><label>Estado<select id="next-status"><option>PENDIENTE</option><option>CANCELADO</option><option>COMPLETADO</option></select></label><button id="save-status" class="primary">Guardar estado</button><p class="message" id="detail-message" role="status"></p>`;
+    document.getElementById('dialog-title').textContent=`Pedido ${orderNumber(o.public_number)}`;
+    document.getElementById('order-detail').innerHTML=`<div class="detail-grid"><p><b>Número de pedido</b><br>${esc(orderNumber(o.public_number))}</p><p><b>Identificador interno</b><br>${esc(o.id)}</p><p><b>Cliente</b><br>${esc(o.customer_first_name)} ${esc(o.customer_last_name)}</p><p><b>Contacto</b><br>${esc(o.customer_email)} · ${esc(o.customer_phone)}</p><p><b>Entrega</b><br>${esc(o.delivery_address)}, ${esc(o.delivery_city)}</p><p><b>Pago</b><br>${esc(o.payment_method)} · ${esc(o.payment_status)}</p><p><b>Estado</b><br>${esc(o.status)}</p><p><b>Creado</b><br>${esc(fmt(o.created_at))}</p></div><h3>Productos</h3>${(o.order_items||[]).map(i=>`<div class="item-row item"><p>${esc(i.product_name)} × ${i.quantity}<br>${money(i.unit_price)} c/u</p><label>Cantidad<input data-quantity="${i.product_id}" type="number" min="1" max="100" value="${i.quantity}" disabled></label></div>`).join('')}<p>Subtotal ${money(o.subtotal)} · Envío ${money(o.shipping)} · <b>Total ${money(o.total)}</b></p>${receiptMarkup}<h3>Acciones del pedido</h3><label>Estado<select id="next-status"><option>PENDIENTE</option><option>CANCELADO</option><option>COMPLETADO</option></select></label><button id="save-status" class="primary">Guardar estado</button><p class="message" id="detail-message" role="status"></p>`;
     document.getElementById('next-status').value=o.status;
     document.getElementById('save-status').addEventListener('click',()=>updateStatus(o));
     document.querySelectorAll('[data-review]').forEach(b=>b.addEventListener('click',()=>reviewReceipt(receipt,b.dataset.review)));
